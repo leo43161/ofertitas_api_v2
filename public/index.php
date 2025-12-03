@@ -37,7 +37,7 @@ $router->post('/auth/logout', ['Src\Controllers\AuthController', 'logout']);
 $router->get('/companies', ['Src\Controllers\CompanyController', 'index']);
 $router->get('/companies/{id}', ['Src\Controllers\CompanyController', 'getOne']);
 $router->post('/companies', ['Src\Controllers\CompanyController', 'create']);
-$router->put('/companies/{id}', ['Src\Controllers\CompanyController', 'update']);
+$router->post('/companies/{id}', ['Src\Controllers\CompanyController', 'update']);
 $router->delete('/companies/{id}', ['Src\Controllers\CompanyController', 'delete']);
 // Rutas de Locales (Locations)
 $router->get('/locations', ['Src\Controllers\LocationController', 'index']);
@@ -55,11 +55,17 @@ $router->delete('/users/{id}', ['Src\Controllers\UserController', 'delete']);
 $router->get('/offers', ['Src\Controllers\OfferController', 'index']);
 $router->get('/offers/{id}', ['Src\Controllers\OfferController', 'getOne']);
 $router->post('/offers', ['Src\Controllers\OfferController', 'create']);
+$router->post('/offers/{id}', ['Src\Controllers\OfferController', 'update']);
 // Nota: Para editar con archivos en PHP, a veces POST es más fácil que PUT.
 // Pero si tu frontend envía PUT, asegúrate de manejar el "method spoofing" o FormData manual.
 // Por simplicidad y compatibilidad con archivos, usaremos POST para crear y DELETE para borrar.
 // Si necesitas UPDATE, avísame para darte el truco del "_method: PUT" en FormData.
 $router->delete('/offers/{id}', ['Src\Controllers\OfferController', 'delete']);
+// Rutas de Categorías
+$router->get('/categories', ['Src\Controllers\CategoryController', 'index']);
+$router->get('/categories/{id}', ['Src\Controllers\CategoryController', 'getOne']);
+// Dashboard Stats
+$router->get('/dashboard/stats', ['Src\Controllers\DashboardController', 'getStats']);
 
 // 6. Despachar la petición
 $router->dispatch();

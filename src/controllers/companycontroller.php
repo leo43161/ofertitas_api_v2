@@ -4,6 +4,7 @@ namespace Src\Controllers;
 
 use Src\Models\Company;
 use Src\Middleware\Auth;
+use Src\Utils\ImageUploader;
 
 class CompanyController extends Controller
 {
@@ -21,37 +22,17 @@ class CompanyController extends Controller
         $this->jsonResponse($companies);
     }
 
-    public function create()
+    // Helper privado para generar slugs (Ej: "Mi Pizzería" -> "mi-pizzeria")
+    private function createSlug($text)
     {
-        // 1. PROTECCIÓN
-        $user = Auth::handle();
-
-        // 2. Verificar permiso (Solo Superadmin puede crear empresas)
-        if ($user->role !== 'superadmin') {
-            $this->jsonResponse(["message" => "No tienes permisos para crear empresas"], 403);
-        }
-
-        // 3. Obtener y validar datos
-        $data = $this->getBody();
-        $this->validateRequired($data, ['name']);
-
-        // 4. Guardar en BD
-        $companyModel = new Company($this->db);
-
-        // Asignamos el dueño si viene en el post, o null
-        $insertData = [
-            'name' => $data['name'],
-            'owner_id' => $data['owner_id'] ?? null
-        ];
-
-        $id = $companyModel->create($insertData);
-
-        if ($id) {
-            $this->jsonResponse(["message" => "Empresa creada", "id" => $id], 201);
-        } else {
-            $this->jsonResponse(["message" => "Error al crear empresa"], 500);
-        }
+        $text = preg_replace('~[^\pL\d]+~u', '-', $text);
+        $text = iconv('utf-8', 'us-ascii//TRANSLIT', $text);
+        $text = preg_replace('~[^-\w]+~', '', $text);
+        $text = trim($text, '-');
+        $text = strtolower($text);
+        return empty($text) ? 'n-a' : $text;
     }
+
     public function getOne($id)
     {
         $user = Auth::handle();
@@ -70,36 +51,101 @@ class CompanyController extends Controller
         $this->jsonResponse($company);
     }
 
+    public function create()
+    {
+        // 1. PROTECCIÓN
+        $user = Auth::handle();
+
+        if ($user->role !== 'superadmin') {
+            $this->jsonResponse(["message" => "No tienes permisos para crear empresas"], 403);
+        }
+
+        // 2. Obtener datos (Usamos POST y FILES para soportar FormData e imágenes)
+        $data = $_POST;
+        $files = $_FILES;
+
+        $this->validateRequired($data, ['name']);
+
+        // 3. Manejo de Imágenes
+        $logoUrl = null;
+        if (isset($files['logo']) && $files['logo']['size'] > 0) {
+            $logoUrl = ImageUploader::upload($files['logo'], 'companies/logos');
+        }
+
+        $coverUrl = null;
+        if (isset($files['cover']) && $files['cover']['size'] > 0) {
+            $coverUrl = ImageUploader::upload($files['cover'], 'companies/covers');
+        }
+
+        // 4. Preparar datos
+        $companyModel = new Company($this->db);
+
+        $insertData = [
+            'name' => $data['name'],
+            'owner_id' => !empty($data['owner_id']) ? $data['owner_id'] : null,
+            'slug' => $this->createSlug($data['name']),
+            'description' => $data['description'] ?? null,
+            'website' => $data['website'] ?? null,
+            'logo_url' => $logoUrl,
+            'cover_url' => $coverUrl
+        ];
+
+        $id = $companyModel->create($insertData);
+
+        if ($id) {
+            $this->jsonResponse(["message" => "Empresa creada", "id" => $id], 201);
+        } else {
+            $this->jsonResponse(["message" => "Error al crear empresa"], 500);
+        }
+    }
+
     public function update($id)
     {
         $user = Auth::handle();
 
-        // Validar permisos: Solo Superadmin puede editar empresas
-        // (Opcional: Podrías dejar que el Owner edite nombre/logo, pero aquí restringimos a Superadmin)
-        if ($user->role !== 'superadmin') {
-            // Si quisieras permitir al Owner:
-            // if ($user->role === 'owner' && $user->company_id != $id) error 403...
-            $this->jsonResponse(["message" => "Solo Superadmin puede editar empresas"], 403);
-        }
 
         $companyModel = new Company($this->db);
         $company = $companyModel->getOne($id);
 
         if (!$company) $this->jsonResponse(["message" => "Empresa no encontrada"], 404);
 
-        $data = $this->getBody();
 
-        // Preparamos datos (manteniendo el nombre anterior si no se envía uno nuevo)
+        if ($user->role !== 'superadmin' && $user->role === 'manager' && $company['id'] != $user->company_id) {
+            $this->jsonResponse(["message" => "Solo Superadmin puede editar empresas"], 403);
+        }
+        // Usamos POST/FILES para update también
+        $data = $_POST;
+        $files = $_FILES;
+
+        // Manejo de nuevas imágenes (si no se envían, quedan null y el modelo no las toca)
+        $logoUrl = null;
+        if (isset($files['logo']) && $files['logo']['size'] > 0) {
+            $logoUrl = ImageUploader::upload($files['logo'], 'companies/logos');
+        }
+
+        $coverUrl = null;
+        if (isset($files['cover']) && $files['cover']['size'] > 0) {
+            $coverUrl = ImageUploader::upload($files['cover'], 'companies/covers');
+        }
+
         $updateData = [
             'name' => $data['name'] ?? $company['name'],
-            // Solo actualizamos owner_id si se envía explícitamente
-            'owner_id' => array_key_exists('owner_id', $data) ? $data['owner_id'] : null
+            'description' => $data['description'] ?? $company['description'],
+            'website' => $data['website'] ?? $company['website'],
+            'owner_id' => !empty($data['owner_id']) ? $data['owner_id'] : null
         ];
 
-        // Limpieza si owner_id es null para que no sobreescriba si no existe en el array
-        if (!array_key_exists('owner_id', $data)) {
-            unset($updateData['owner_id']);
+        // Si cambia el nombre, actualizamos el slug
+        if (isset($data['name']) && $data['name'] !== $company['name']) {
+            $updateData['slug'] = $this->createSlug($data['name']);
         }
+
+        // Solo agregamos URLs si se subieron archivos nuevos
+        if ($logoUrl) $updateData['logo_url'] = $logoUrl;
+        if ($coverUrl) $updateData['cover_url'] = $coverUrl;
+
+        // Limpieza de owner_id si no venía en el request original para evitar sobreescritura accidental
+        if (!isset($data['owner_id'])) unset($updateData['owner_id']);
 
         if ($companyModel->update($id, $updateData)) {
             $this->jsonResponse(["message" => "Empresa actualizada"]);

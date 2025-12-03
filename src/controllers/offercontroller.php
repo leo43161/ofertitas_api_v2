@@ -1,21 +1,26 @@
 <?php
+
 namespace Src\Controllers;
 
 use Src\Models\Offer;
 use Src\Models\Location;
+use Src\Models\Company;
 use Src\Middleware\Auth;
 use Src\Utils\ImageUploader;
 
-class OfferController extends Controller {
+class OfferController extends Controller
+{
 
-    public function index() {
+    public function index()
+    {
         $user = Auth::handle();
         $offerModel = new Offer($this->db);
         $offers = $offerModel->getAll($user);
         $this->jsonResponse($offers);
     }
 
-    public function getOne($id) {
+    public function getOne($id)
+    {
         $user = Auth::handle();
         $offerModel = new Offer($this->db);
         $offer = $offerModel->getOne($id);
@@ -28,9 +33,10 @@ class OfferController extends Controller {
         $this->jsonResponse($offer);
     }
 
-    public function create() {
+    public function create()
+    {
         $user = Auth::handle();
-        
+
         // Nota: Al usar FormData, los datos vienen en $_POST, no en php://input
         $data = $_POST;
         $files = $_FILES;
@@ -51,11 +57,31 @@ class OfferController extends Controller {
             $this->jsonResponse(["message" => "Solo puedes crear ofertas en tu local asignado"], 403);
         }
 
+        $companyModel = new Company($this->db);
+        $company = $companyModel->getOne($user->company_id);
+
+        if (!$company) {
+            $this->jsonResponse(["message" => "La empresa no existe", "company_id" => $data], 404);
+            return;
+        }
+        $offerModel = new Offer($this->db);
+
+        $activeOffers = $offerModel->countActiveOffersByLocation($data['location_id']);
+        if ($company['plan'] === 'basic') {
+            $activeOffers = $offerModel->countActiveOffersByLocation($data['location_id']);
+
+            // Límite: 5 ofertas
+            if ($activeOffers >= 5) {
+                $this->jsonResponse(["message" => "Límite alcanzado. El plan Básico permite máximo 5 ofertas activas por local. Actualiza a Premium para más."], 403);
+                return;
+            }
+        }
+
         // Manejo de Imagen
         $imageUrl = null;
-        if (isset($files['image'])) {
+        if (isset($files['image_url'])) {
             try {
-                $imageUrl = ImageUploader::upload($files['image'], 'offers');
+                $imageUrl = ImageUploader::upload($files['image_url'], 'offers');
             } catch (\Exception $e) {
                 $this->jsonResponse(["message" => $e->getMessage()], 400);
             }
@@ -77,23 +103,73 @@ class OfferController extends Controller {
             'image_url' => $imageUrl
         ];
 
-        $offerModel = new Offer($this->db);
         $id = $offerModel->create($offerData);
 
         if ($id) {
-            $this->jsonResponse(["message" => "Oferta creada", "id" => $id], 201);
+            $this->jsonResponse(["message" => "Oferta creada", "id" => $id, "activeOffers" => $activeOffers], 201);
         } else {
             $this->jsonResponse(["message" => "Error al crear oferta"], 500);
         }
     }
 
-    public function delete($id) {
+    public function update($id)
+    {
         $user = Auth::handle();
         $offerModel = new Offer($this->db);
         $offer = $offerModel->getOne($id);
 
         if (!$offer) $this->jsonResponse(["message" => "Oferta no encontrada"], 404);
-        
+
+        // Seguridad: Verificar permisos
+        $this->checkPermissions($user, $offer);
+
+        // Datos (POST y FILES)
+        $data = $_POST;
+        $files = $_FILES;
+
+        // Manejo de Imagen (Solo si se sube una nueva)
+        $imageUrl = null;
+        if (isset($files['image_url']) && $files['image_url']['size'] > 0) {
+            try {
+                $imageUrl = ImageUploader::upload($files['image_url'], 'offers');
+            } catch (\Exception $e) {
+                $this->jsonResponse(["message" => $e->getMessage()], 400);
+            }
+        }
+
+        // Preparar datos para el Modelo
+        // Nota: Usamos el operador ?? o verificamos isset para permitir actualizaciones parciales
+        $updateData = [
+            'title' => $data['title'] ?? $offer['title'],
+            'description' => $data['description'] ?? $offer['description'],
+            'discount_text' => $data['discount_text'] ?? $offer['discount_text'],
+            'price_normal' => $data['price_normal'] ?? $offer['price_normal'],
+            'price_offer' => $data['price_offer'] ?? $offer['price_offer'],
+            'start_date' => !empty($data['start_date']) ? $data['start_date'] : null,
+            'end_date' => !empty($data['end_date']) ? $data['end_date'] : null,
+            'is_visible' => isset($data['is_visible']) ? (int)$data['is_visible'] : $offer['is_visible'],
+            'is_featured' => isset($data['is_featured']) ? (int)$data['is_featured'] : $offer['is_featured'],
+            'category_id' => $data['category_id'] ?? $offer['category_id'],
+            'location_id' => $data['location_id'] ?? $offer['location_id'],
+            // Si $imageUrl es null, el modelo debería ignorarlo o manejarlo (verificaremos el modelo abajo)
+            'image_url' => $imageUrl
+        ];
+
+        if ($offerModel->update($id, $updateData)) {
+            $this->jsonResponse(["message" => "Oferta actualizada"]);
+        } else {
+            $this->jsonResponse(["message" => "Error al actualizar"], 500);
+        }
+    }
+
+    public function delete($id)
+    {
+        $user = Auth::handle();
+        $offerModel = new Offer($this->db);
+        $offer = $offerModel->getOne($id);
+
+        if (!$offer) $this->jsonResponse(["message" => "Oferta no encontrada"], 404);
+
         $this->checkPermissions($user, $offer);
 
         if ($offerModel->delete($id)) {
@@ -104,7 +180,8 @@ class OfferController extends Controller {
     }
 
     // Helper privado para chequear permisos de edición/borrado
-    private function checkPermissions($user, $offer) {
+    private function checkPermissions($user, $offer)
+    {
         if ($user->role === 'superadmin') return true;
 
         // Si es manager, debe coincidir el location_id de la oferta con el suyo

@@ -75,7 +75,7 @@ class Location {
 
     public function update($id, $data) {
         $query = "UPDATE " . $this->table . "
-                  SET address = :address, latitude = :latitude, longitude = :longitude, phone = :phone
+                  SET address = :address, latitude = :latitude, longitude = :longitude, phone = :phone, company_id = :company_id
                   WHERE id = :id";
         
         $stmt = $this->db->prepare($query);
@@ -85,6 +85,7 @@ class Location {
 
         $stmt->bindParam(':address', $address);
         $stmt->bindParam(':latitude', $data['latitude']);
+        $stmt->bindParam(':company_id', $data['company_id']);
         $stmt->bindParam(':longitude', $data['longitude']);
         $stmt->bindParam(':phone', $phone);
         $stmt->bindParam(':id', $id);

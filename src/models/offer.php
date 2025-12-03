@@ -11,6 +11,22 @@ class Offer {
         $this->db = $db;
     }
 
+
+    public function countActiveOffersByLocation($locationId) {
+        // Contamos ofertas con status 'active' Y que la fecha de fin sea mayor o igual a hoy
+        $query = "SELECT COUNT(*) as total FROM " . $this->table . " 
+                  WHERE location_id = :location_id 
+                  AND status = 'active' ";
+                  /* AND end_date >= CURDATE()"; */
+
+        $stmt = $this->db->prepare($query);
+        $stmt->bindParam(':location_id', $locationId);
+        $stmt->execute();
+
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return (int)$row['total'];
+    }
+
     public function getAll($user) {
         $query = "SELECT 
                     o.*,
@@ -116,6 +132,7 @@ class Offer {
                     end_date = :end_date,
                     is_visible = :is_visible,
                     is_featured = :is_featured,
+                    location_id = :location_id,
                     category_id = :category_id";
 
         // Solo actualizamos imagen si se envió una nueva URL
@@ -140,6 +157,7 @@ class Offer {
         
         $stmt->bindParam(':is_visible', $data['is_visible']);
         $stmt->bindParam(':is_featured', $data['is_featured']);
+        $stmt->bindParam(':location_id', $data['location_id']);
         $stmt->bindParam(':category_id', $data['category_id']);
 
         if (!empty($data['image_url'])) {

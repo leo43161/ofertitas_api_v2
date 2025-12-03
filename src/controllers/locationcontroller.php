@@ -76,7 +76,7 @@ class LocationController extends Controller {
         if ($user->role === 'owner' && $location['company_id'] != $user->company_id) {
             $this->jsonResponse(["message" => "No autorizado"], 403);
         }
-        if ($user->role === 'manager') { // Managers no editan locales, solo ofertas
+        if ($user->role === 'manager' && $location['id'] != $user->location_id) { // Managers no editan locales, solo ofertas
              $this->jsonResponse(["message" => "Permiso denegado"], 403);
         }
 
