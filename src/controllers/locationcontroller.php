@@ -1,19 +1,24 @@
 <?php
+
 namespace Src\Controllers;
 
 use Src\Models\Location;
+use Src\Models\Company;
 use Src\Middleware\Auth;
 
-class LocationController extends Controller {
+class LocationController extends Controller
+{
 
-    public function index() {
+    public function index()
+    {
         $user = Auth::handle();
         $locationModel = new Location($this->db);
         $locations = $locationModel->getAll($user);
         $this->jsonResponse($locations);
     }
 
-    public function getOne($id) {
+    public function getOne($id)
+    {
         $user = Auth::handle();
         $locationModel = new Location($this->db);
         $location = $locationModel->getOne($id);
@@ -30,9 +35,10 @@ class LocationController extends Controller {
         $this->jsonResponse($location);
     }
 
-    public function create() {
+    public function create()
+    {
         $user = Auth::handle();
-        
+
         // Managers no pueden crear locales
         if ($user->role === 'manager') {
             $this->jsonResponse(["message" => "Permiso denegado"], 403);
@@ -49,11 +55,16 @@ class LocationController extends Controller {
             }
             $companyId = $data['company_id'];
         } else {
-            // Owner: Forzamos su ID
+            $companyModel = new Company($this->db);
             $companyId = $user->company_id;
+            if (!$companyModel->canCreateLocation($companyId)) {
+                $this->jsonResponse(["message" => "Has alcanzado el límite de sucursales para tu plan actual."], 403);
+                return;
+            }
+            // Owner: Forzamos su ID
         }
-
         $locationModel = new Location($this->db);
+
         $insertData = array_merge($data, ['company_id' => $companyId]);
 
         $id = $locationModel->create($insertData);
@@ -65,26 +76,27 @@ class LocationController extends Controller {
         }
     }
 
-    public function update($id) {
+    public function update($id)
+    {
         $user = Auth::handle();
         $locationModel = new Location($this->db);
-        
+
         // Verificar existencia y propiedad
         $location = $locationModel->getOne($id);
         if (!$location) $this->jsonResponse(["message" => "Local no encontrado"], 404);
-        
+
         if ($user->role === 'owner' && $location['company_id'] != $user->company_id) {
             $this->jsonResponse(["message" => "No autorizado"], 403);
         }
         if ($user->role === 'manager' && $location['id'] != $user->location_id) { // Managers no editan locales, solo ofertas
-             $this->jsonResponse(["message" => "Permiso denegado"], 403);
+            $this->jsonResponse(["message" => "Permiso denegado"], 403);
         }
 
         $data = $this->getBody();
         // Validamos mínimos para update
-        if(empty($data['address'])) $data['address'] = $location['address'];
-        if(empty($data['latitude'])) $data['latitude'] = $location['latitude'];
-        if(empty($data['longitude'])) $data['longitude'] = $location['longitude'];
+        if (empty($data['address'])) $data['address'] = $location['address'];
+        if (empty($data['latitude'])) $data['latitude'] = $location['latitude'];
+        if (empty($data['longitude'])) $data['longitude'] = $location['longitude'];
 
         if ($locationModel->update($id, $data)) {
             $this->jsonResponse(["message" => "Local actualizado"]);
@@ -93,10 +105,11 @@ class LocationController extends Controller {
         }
     }
 
-    public function delete($id) {
+    public function delete($id)
+    {
         $user = Auth::handle();
         $locationModel = new Location($this->db);
-        
+
         $location = $locationModel->getOne($id);
         if (!$location) $this->jsonResponse(["message" => "Local no encontrado"], 404);
 
@@ -104,7 +117,7 @@ class LocationController extends Controller {
             $this->jsonResponse(["message" => "No autorizado"], 403);
         }
         if ($user->role === 'manager') {
-             $this->jsonResponse(["message" => "Permiso denegado"], 403);
+            $this->jsonResponse(["message" => "Permiso denegado"], 403);
         }
 
         if ($locationModel->delete($id)) {

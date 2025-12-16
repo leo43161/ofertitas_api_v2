@@ -8,7 +8,7 @@ class CategoryController extends Controller {
 
     public function index() {
         // Verificamos autenticación (Cualquier usuario logueado puede ver categorías)
-        Auth::handle();
+        /* Auth::handle(); */
 
         $categoryModel = new Category($this->db);
         $categories = $categoryModel->getAll();

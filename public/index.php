@@ -34,6 +34,7 @@ $router->post('/auth/login', ['Src\Controllers\AuthController', 'login']);
 $router->post('/auth/logout', ['Src\Controllers\AuthController', 'logout']);
 // Rutas de Empresas (Protegidas internamente por el controlador)
 // Rutas de Empresas
+$router->get('/companies/recent/activity', ['Src\Controllers\CompanyController', 'getRecentActivity']);
 $router->get('/companies', ['Src\Controllers\CompanyController', 'index']);
 $router->get('/companies/{id}', ['Src\Controllers\CompanyController', 'getOne']);
 $router->post('/companies', ['Src\Controllers\CompanyController', 'create']);
@@ -53,6 +54,8 @@ $router->put('/users/{id}', ['Src\Controllers\UserController', 'update']);
 $router->delete('/users/{id}', ['Src\Controllers\UserController', 'delete']);
 // Rutas de Ofertas
 $router->get('/offers', ['Src\Controllers\OfferController', 'index']);
+$router->get('/offers/feed/{id}', ['Src\Controllers\OfferController', 'getCompanyFeed']);
+$router->get('/offers/feed', ['Src\Controllers\OfferController', 'getCompanyFeedAll']);
 $router->get('/offers/{id}', ['Src\Controllers\OfferController', 'getOne']);
 $router->post('/offers', ['Src\Controllers\OfferController', 'create']);
 $router->post('/offers/{id}', ['Src\Controllers\OfferController', 'update']);

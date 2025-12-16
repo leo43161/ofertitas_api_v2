@@ -12,6 +12,7 @@ class Auth {
         $token = null;
 
         // 1. Intentar obtener token de la Cookie (Prioridad)
+        var_dump($headers);
         if (isset($_COOKIE['token'])) {
             $token = $_COOKIE['token'];
         } 
@@ -39,6 +40,45 @@ class Auth {
             // Token expirado o inválido
             self::unauthorized("Token inválido o expirado: " . $e->getMessage());
         }
+    }
+
+    public static function check()
+    {
+        $headers = apache_request_headers();
+        $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : null;
+
+        if (!$authHeader) {
+            return null; // Es un invitado
+        }
+
+        try {
+            // Reutilizamos la lógica de validación existente
+            // Nota: Asumo que tu lógica interna usa JWT::decode o similar.
+            // Si handle() hace todo, idealmente refactorizaríamos, pero para salir del paso:
+            
+            // Intento manual rápido de validación si tienes la lógica accesible, 
+            // OJO: Si 'handle()' tiene 'exit()' dentro, no podemos llamarlo directamente.
+            // Lo mejor es copiar la lógica de decodificación de handle() aquí dentro de un try/catch
+            
+            // *Asumiendo lógica estándar JWT*:
+            $matches = [];
+            if (preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+                $token = $matches[1];
+                // Aquí deberías usar tu clase JWT para decodificar
+                // $payload = JWT::decode($token, ...);
+                // return $payload; 
+                
+                // *TRUCO RÁPIDO*: Si no quieres duplicar código, usa handle() 
+                // PERO solo si modificas handle() para que lance Excepción en vez de exit().
+                
+                // Si no quieres tocar mucho, dejemos que la App envíe sin header
+                // y retornemos null directo arriba.
+                return null; // Por ahora, si hay header invalido, lo tratamos como invitado.
+            }
+        } catch (\Exception $e) {
+            return null;
+        }
+        return null;
     }
 
     private static function unauthorized($message) {

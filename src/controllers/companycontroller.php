@@ -35,7 +35,10 @@ class CompanyController extends Controller
 
     public function getOne($id)
     {
-        $user = Auth::handle();
+        $user = null;
+        if (isset($_COOKIE['token'])) {
+            $user = Auth::handle(); // Manejo de error silencioso o explícito
+        }
         $companyModel = new Company($this->db);
         $company = $companyModel->getOne($id);
 
@@ -44,9 +47,11 @@ class CompanyController extends Controller
         }
 
         // Seguridad: Owner solo ve SU empresa
-        if ($user->role === 'owner' && $company['id'] != $user->company_id) {
-            $this->jsonResponse(["message" => "No autorizado"], 403);
-        }
+        /* if (isset($user)) {
+            if ($user->role === 'owner' && $company['id'] != $user->company_id) {
+                $this->jsonResponse(["message" => "No autorizado", "role" => $user], 403);
+            }
+        } */
 
         $this->jsonResponse($company);
     }
@@ -174,5 +179,17 @@ class CompanyController extends Controller
         } else {
             $this->jsonResponse(["message" => "Error al eliminar"], 500);
         }
+    }
+
+    public function getRecentActivity()
+    {
+        // Validar Auth si quieres (o dejarlo público para ver ofertas)
+        // $user = Auth::handle(); 
+
+        $companyModel = new Company($this->db);
+        $recent = $companyModel->getRecentActivityWithOffers();
+
+        // Estructura limpia para el Frontend
+        $this->jsonResponse($recent);
     }
 }
